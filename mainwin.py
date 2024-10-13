@@ -39,7 +39,7 @@ class MainWindow(ToolPanel):
                 else:
                     new = key.char
         except AttributeError:
-            keyname = str(key).replace('Key,', '').replace('_l', '').replace('_gr', '').replace('_r', '')
+            keyname = str(key).replace('Key.', '').replace('_l', '').replace('_gr', '').replace('_r', '')
             if key == keyboard.Key.enter:
                 if mo == 'sc':
                     self.change_lock_btn_image_s()
@@ -49,7 +49,7 @@ class MainWindow(ToolPanel):
                 vr.set('')
             else:
                 old = vr.get()
-                if len(old.split('+')) >= 3 or key.char in old.lower().split('+'):
+                if len(old.split('+')) >= 3 or keyname in old.lower().split('+'):
                     return
                 if old:
                     new = old + '+' + keyname

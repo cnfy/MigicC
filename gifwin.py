@@ -83,13 +83,13 @@ class GifRecorder(tk.Toplevel):
             im = img_list[0]
             self.center_filedialog()
             ask = filedialog.asksaveasfilename(parent=self.center_w, initialdir=self.settings.recent_path,
-                                               defaultextension='.png', filetypes=[("GIF Files", "*.gif")])
+                                               defaultextension='.gif', filetypes=[("GIF Files", "*.gif")])
             self.center_w.destroy()
             if ask:
                 self.settings.update('recent_path', os.path.dirname(ask))
                 sec = (end - start)
                 dur = sec / (len(img_list) - 1) * 1000
-                im.save(ask, save_all=True, append_iamges=img_list[1:], loop=0, duration=dur)
+                im.save(ask, save_all=True, append_images=img_list[1:], loop=0, duration=dur)
         img_list = []
         start = time.time()
         while self.recording:

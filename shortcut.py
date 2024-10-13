@@ -85,6 +85,7 @@ class Shortcut(tk.Toplevel):
             win32clipboard.CloseClipboard()
         output = BytesIO()
         image = ImageGrab.grab(bbox= leftup+rightdown, all_screens=True)
+        image = ImageEnhance.Brightness(image).enhance(1.33)
         image.convert('RGB').save(output, "BMP")
         data = output.getvalue()[14:]
         output.close()
@@ -228,10 +229,10 @@ class Shortcut(tk.Toplevel):
             self.canvas.delete('shortcut_area')
             leftx, lefty = min(self.startx, event.x), min(self.starty, event.y)
             rightx, righty = max(self.startx, event.x), max(self.starty, event.y)
-            self.shortcut_area = [(leftx + 1, lefty + 1),(rightx - 1, righty - 1)]
-            image = Image.new('RGBA',(rightx-leftx,righty-lefty), (255, 255, 255, 0))
-            self.rec_image = ImageTk.PhotoImage(ImageOps.expand(image, border=2, fill='#0378C1'))
-            self.canvas.create_image(leftx, lefty, image=self.rec_image, anchor=tk.NW, tags='shortcut_area')
+            self.shortcut_area = [(leftx, lefty),(rightx, righty)]
+            image = Image.new('RGBA',(rightx - leftx, righty - lefty), (255, 255, 255, 0))
+            self.rec_image = ImageTk.PhotoImage(ImageOps.expand(image, border=1, fill='#0378C1'))
+            self.canvas.create_image(leftx-1, lefty-1, image=self.rec_image, anchor=tk.NW, tags='shortcut_area')
 
     def paint_release(self, event):
         self.shortcuting = False
