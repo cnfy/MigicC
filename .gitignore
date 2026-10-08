@@ -3,3 +3,9 @@ __pycache__/
 build/
 venv/
 dist/config.ini
+
+# Build output
+/dist/
+
+# Local configuration
+/config.ini
