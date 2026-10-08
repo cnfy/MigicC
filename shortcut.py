@@ -25,7 +25,7 @@ class Shortcut(tk.Toplevel):
     def _init_status(self):
         self.OUTPUT_PATH = Path(__file__).parent
         self.ASSETS_PATH = self.OUTPUT_PATH / Path('media')
-        self.queue = start_queue(max=1)
+        self.queue = start_queue(self, max=1)
         self.shortcuting = False
         self.marking = False
         self.markid = 1
@@ -66,7 +66,8 @@ class Shortcut(tk.Toplevel):
         self.current_screen_image = ImageGrab.grab(bbox=(
         self.myscreen.x, self.myscreen.y, self.myscreen.x + self.myscreen.width,
         self.myscreen.y + self.myscreen.height), all_screens=True)
-        self.current_screen_image = ImageEnhance.Brightness(self.current_screen_image).enhance(0.75)
+        self.original_screen_image = self.current_screen_image.copy()
+        self.current_screen_image = ImageEnhance.Brightness(self.original_screen_image).enhance(0.75)
         self.cv_img = ImageTk.PhotoImage(self.current_screen_image)
         self.canvas.create_image(0, 0, image=self.cv_img, anchor=tk.NW)
 
@@ -76,46 +77,68 @@ class Shortcut(tk.Toplevel):
         self.tool_bar.gif_btn.configure(command=self.start_gif)
         self.tool_bar.mark_btn.configure(command=self.mark_mode)
         self.tool_bar.undo_btn.configure(command=self.undo_mark)
+        self.tool_bar.qr_btn.configure(command=self.share_qr)
+
+    def share_qr(self):
+        from qrshare import QRShareWindow
+        image = self.selected_image(*self.shortcut_area)
+        self.lock_bind()
+        self.tool_bar.disable_btns()
+        self.withdraw()
+        window = QRShareWindow(self.master, image, screen=self.myscreen,
+                               share_mode=self.settings.share_mode)
+        self.wait_window(window)
+        self.close_window(0)
+
+    def selected_image(self, leftup, rightdown):
+        # Export the original pixels, never the dimmed overlay or a brightened grab.
+        x, y = self.myscreen.x, self.myscreen.y
+        image = self.original_screen_image.crop((leftup[0]-x, leftup[1]-y,
+                                                 rightdown[0]-x, rightdown[1]-y))
+        from PIL import ImageDraw
+        draw = ImageDraw.Draw(image)
+        for tag in self.mark_stack:
+            coords = self.canvas.coords(tag)
+            if len(coords) == 4:
+                draw.rectangle((coords[0]-(leftup[0]-x), coords[1]-(leftup[1]-y),
+                                coords[2]-(leftup[0]-x), coords[3]-(leftup[1]-y)), outline='red', width=1)
+        return image
+
+    @staticmethod
+    def export_image(owner, settings, image, save):
+        if save:
+            ask = filedialog.asksaveasfilename(parent=owner, initialdir=settings.recent_path,
+                    defaultextension='.png', filetypes=[('PNG Files', '*.png'), ('JPG Files', '*.jpg')])
+            if ask:
+                image.convert('RGB').save(ask)
+                settings.update('recent_path', os.path.dirname(ask))
+        else:
+            output = BytesIO()
+            image.convert('RGB').save(output, 'BMP')
+            win32clipboard.OpenClipboard()
+            try:
+                win32clipboard.EmptyClipboard()
+                win32clipboard.SetClipboardData(win32clipboard.CF_DIB, output.getvalue()[14:])
+            finally:
+                win32clipboard.CloseClipboard()
+                output.close()
+
+    @staticmethod
+    def export_region(owner, settings, area, save):
+        image = ImageGrab.grab(bbox=tuple(area[0])+tuple(area[1]), all_screens=True)
+        Shortcut.export_image(owner, settings, image, save)
 
     def send_shortcut(self, leftup=None, rightdown=None):
-        def send_to_clipboard(clip_type, data):
-            win32clipboard.OpenClipboard()
-            win32clipboard.EmptyClipboard()
-            win32clipboard.SetClipboardData(clip_type, data)
-            win32clipboard.CloseClipboard()
-        output = BytesIO()
-        image = ImageGrab.grab(bbox= leftup+rightdown, all_screens=True)
-        image = ImageEnhance.Brightness(image).enhance(1.33)
-        image.convert('RGB').save(output, "BMP")
-        data = output.getvalue()[14:]
-        output.close()
-        send_to_clipboard(win32clipboard.CF_DIB, data)
-        self.isopened = False
-        self.destroy()
-
-    def center_filedialog(self):
-        self.center_w = tk.Tk()
-        x = self.center_w.winfo_screenwidth() // 4
-        y = self.center_w.winfo_screenheight() // 4
-        self.center_w.geometry(f'10x10+{x}+{y}')
-        self.center_w.overrideredirect(True)
-        self.center_w.attributes('-transparentcolor', self.glass_color)
-        self.center_w.configure(bg=self.glass_color)
+        image = self.selected_image(leftup, rightdown)
+        self.close_window(0)
+        self.export_image(self.master, self.settings, image, False)
 
     def save_shortcut(self, leftup=None, rightdown=None):
-        image = ImageGrab.grab(bbox=leftup+rightdown, all_screens=True)
-        image = ImageEnhance.Brightness(image).enhance(1.33)
+        image = self.selected_image(leftup, rightdown)
         self.close_window(0)
-        self.center_filedialog()
-        ask = filedialog.asksaveasfilename(parent=self.center_w, initialdir=self.settings.recent_path, defaultextension='.png',
-                                           filetypes=[("PNG Files", "*.png"), ("JPG Files", "*.jpg")])
-        self.center_w.destroy()
-        if ask:
-            self.settings.update('recent_path', os.path.dirname(ask))
-            image.save(ask)
+        self.export_image(self.master, self.settings, image, True)
 
     def close_window(self, event, second=0.0):
-        time.sleep(second)
         self.isopened = False
         self.destroy()
 
@@ -141,20 +164,15 @@ class Shortcut(tk.Toplevel):
             self.countdown()
 
     def countdown(self):
-        self.countdown_times.set('3')
-        while int(self.countdown_times.get()) > 1:
-            time.sleep(1)
-            now = int(self.countdown_times.get())
-            cd = str(now -1)
-            self.countdown_times.set(cd)
-        time.sleep(1)
-        try:
+        remaining = getattr(self, '_remaining', self.settings.gif_countdown)
+        if remaining > 0:
+            self.countdown_times.set(str(remaining))
+            self._remaining = remaining - 1
+            self.after(1000, self.countdown)
+        else:
             self.countdown_label.place_forget()
-            self.update()
             self.withdraw()
-            self.event_generate('<<gif_recorder>>')
-        except Exception:
-            pass
+            self.after(100, lambda:self.event_generate('<<gif_recorder>>'))
 
     def lock_bind(self, with_cancel=True):
         self.canvas.unbind('<Button-1>')
@@ -231,12 +249,12 @@ class Shortcut(tk.Toplevel):
             rightx, righty = max(self.startx, event.x), max(self.starty, event.y)
             self.shortcut_area = [(leftx, lefty),(rightx, righty)]
             image = Image.new('RGBA',(rightx - leftx, righty - lefty), (255, 255, 255, 0))
-            self.rec_image = ImageTk.PhotoImage(ImageOps.expand(image, border=1, fill='#0378C1'))
+            self.rec_image = ImageTk.PhotoImage(ImageOps.expand(image, border=1, fill=self.tool_bar.bg_color))
             self.canvas.create_image(leftx-1, lefty-1, image=self.rec_image, anchor=tk.NW, tags='shortcut_area')
 
     def paint_release(self, event):
         self.shortcuting = False
-        if self.shortcut_area:
+        if self.shortcut_area and self.shortcut_area[1][0] > self.shortcut_area[0][0] and self.shortcut_area[1][1] > self.shortcut_area[0][1]:
             # 放置一次获取组件宽度
             self.tool_bar.place(x=event.x, y=event.y)
             self.tool_bar.update()

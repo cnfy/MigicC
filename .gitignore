@@ -9,3 +9,9 @@ dist/config.ini
 
 # Local configuration
 /config.ini
+
+# Local runtime dependencies and diagnostics
+/.runtime-deps/
+/runtime.stdout.log
+/runtime.stderr.log
+/.env

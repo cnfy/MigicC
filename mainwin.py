@@ -8,24 +8,27 @@ from settings import Settings
 from pynput import keyboard
 from shortcut import Shortcut
 from listenqueue import start_queue
+from version import DISPLAY_NAME
 
 settings = Settings()
-name = 'MagicCamera ver_bate 0.1'
+name = DISPLAY_NAME
 
 class MainWindow(ToolPanel):
     def __init__(self):
         super().__init__()
+        self.queue = start_queue(self)
         self._init_listener()
         self._init_font()
         self.create_menu()
         self.bind_menu()
-        self.shortcut_win = Shortcut(self,self.scale,settings)
-        self.shortcut_win.close_window(0)
+        self.shortcut_win = None
         self.loading_settings()
+        from pcloud_client import start_cloud_cleanup
+        start_cloud_cleanup(self)
 
     def _init_listener(self):
-        self.sc_listener = keyboard.Listener(on_press=lambda e:self.on_press(e, self.select_sc, 'sc'))
-        self.mc_listener = keyboard.Listener(on_press=lambda e:self.on_press(e, self.magic_sc, 'mc'))
+        self.sc_listener = keyboard.Listener(on_press=lambda e:self.queue.put(lambda:self.on_press(e, self.select_sc, 'sc')))
+        self.mc_listener = keyboard.Listener(on_press=lambda e:self.queue.put(lambda:self.on_press(e, self.magic_sc, 'mc')))
 
     def on_press(self, key, vr, mo):
         new = None
@@ -143,8 +146,8 @@ class MainWindow(ToolPanel):
         self.font = ('Arial', 15, 'bold')
 
     def create_menu(self):
-        menu = (pystray.MenuItem('Show', self.show_window, default=True), pystray.Menu.SEPARATOR,
-                pystray.MenuItem('Exit', self.quit_window))
+        menu = (pystray.MenuItem('Show', lambda *args:self.queue.put(self.show_window), default=True), pystray.Menu.SEPARATOR,
+                pystray.MenuItem('Exit', lambda *args:self.queue.put(self.quit_window)))
         image = Image.open(self.relative_to_assets('app.png'))
         self.pystray_icon = pystray.Icon('icon', image, name, menu)
         threading.Thread(target=self.pystray_icon.run, daemon=True).start()
@@ -154,6 +157,9 @@ class MainWindow(ToolPanel):
 
     def quit_window(self, exit=1):
         if exit:
+            self.global_listener.stop()
+            self.sc_listener.stop()
+            self.mc_listener.stop()
             self.pystray_icon.stop()
             self.destroy()
         else:
@@ -168,9 +174,10 @@ class MainWindow(ToolPanel):
         self.menus.get(6).config(command=lambda x:self.update_settings('magic_mode',x))
         self.menus.get(7).configure(command=self.change_lock_btn_image_s)
         self.menus.get(8).configure(command=self.change_lock_btn_image_m)
+        self.menus[9].config(command=lambda value:self.update_settings('share_mode', value))
 
     def open_sub_window(self, *args):
-        if not self.shortcut_win.isopened:
+        if self.shortcut_win is None or not self.shortcut_win.isopened:
             self.shortcut_win = Shortcut(self, scale=self.scale, settings=settings)
             self.update()
 
@@ -178,22 +185,22 @@ class MainWindow(ToolPanel):
         settings.update(key, value)
 
     def magic_run(self, *args):
-        if not self.shortcut_win.isopened:
+        if self.shortcut_win is None or not self.shortcut_win.isopened:
             if settings.magic_mode:
-                self.shortcut_win.save_shortcut(settings.recent_area[0],settings.recent_area[1])
+                Shortcut.export_region(self, settings, settings.recent_area, save=True)
             else:
-                self.shortcut_win.send_shortcut(settings.recent_area[0],settings.recent_area[1])
+                Shortcut.export_region(self, settings, settings.recent_area, save=False)
         else:
             pass
 
     def loading_settings(self):
         self.menus[6].setvalue(int(settings.magic_mode)) # 0:clipboard ,1:save
+        self.menus[9].setvalue(settings.share_mode)
         self.select_sc.set(settings.select_shortcut_key)
         self.magic_sc.set(settings.magic_shortcut_key)
         self.setup_global_hotkeys()
 
     def setup_global_hotkeys(self):
-        self.queue = start_queue()
         self._golbal_listener({
             self.parse_hotkey(settings.select_shortcut_key): self.select_callback,
             self.parse_hotkey(settings.magic_shortcut_key): self.magic_callback,
@@ -212,10 +219,9 @@ class MainWindow(ToolPanel):
     def show_light_label(self):
         self.light_label.place(x=self.adapt_size(87), y=self.adapt_size(self.abs_y + 2), width=self.adapt_size(58),
                                height=self.adapt_size(58))
-        time.sleep(0.25)
-        self.light_label.place_forget()
+        self.after(250, self.light_label.place_forget)
 
-    def window_gradually_(self, mode='dispalys'):
+    def window_gradually_(self, mode='displays'):
         if mode == 'displays':
             for i in range(20):
                 self.attributes('-alpha', (i+1) / 20)

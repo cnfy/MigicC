@@ -1,5 +1,6 @@
 import time
 import tkinter as tk
+from tkinter import font as tkfont
 from pathlib import Path
 from win32api import GetMonitorInfo, MonitorFromPoint, GetCursorPos
 from PIL import Image, ImageTk
@@ -23,10 +24,12 @@ class ToolPanel(tk.Tk):
         self.menus = {}
         self.button_imgs = {}
         self.abs_y = 300
+        self.settings_height = 246
+        self.settings_frame_height = 224
         self.canvas_options_show = False
         self.canvas_settings_show = False
         self.magic_mode = 0 # 0 is copy. 1 is save
-        self.scale = self.winfo_screenwidth() / 3120
+        self.scale = min(self.winfo_screenwidth() / 3120, self.winfo_screenheight() / 2080)
         self.select_sc = tk.StringVar()
         self.magic_sc = tk.StringVar()
         self.slb_var = tk.IntVar()
@@ -54,10 +57,13 @@ class ToolPanel(tk.Tk):
             (self.adapt_size(160), self.adapt_size(62)))
         self.position_img_tk = ImageTk.PhotoImage(self.position_img)
         self.set_img = Image.open(self.relative_to_assets('settings.png')).resize(
-            (self.adapt_size(352), self.adapt_size(202)))
+            (self.adapt_size(352), self.adapt_size(self.settings_height)))
         self.set_img_tk = ImageTk.PhotoImage(self.set_img)
-        self.frame_img = Image.open(self.relative_to_assets('frame.png')).resize(
-            (self.adapt_size(330), self.adapt_size(180)))
+        original_frame = Image.open(self.relative_to_assets('frame.png')).convert('RGB')
+        self.frame_img = Image.new('RGB', (330, self.settings_frame_height), '#262626')
+        self.frame_img.paste(original_frame.crop((0, 36, 330, 180)), (0, 80))
+        self.frame_img = self.frame_img.resize(
+            (self.adapt_size(330), self.adapt_size(self.settings_frame_height)))
         self.frame_img_tk = ImageTk.PhotoImage(self.frame_img)
         self.lock_img = Image.open(self.relative_to_assets('lock.png')).resize(
             (self.adapt_size(20), self.adapt_size(20)))
@@ -202,8 +208,8 @@ class ToolPanel(tk.Tk):
             self.canvas_settings.place_forget()
             self.canvas_settings_show = False
         else:
-            if self.winfo_rooty() + self.adapt_size(self.abs_y - 214) > 0:
-                y = self.adapt_size(self.abs_y - 214)
+            if self.winfo_rooty() + self.adapt_size(self.abs_y - self.settings_height - 12) > 0:
+                y = self.adapt_size(self.abs_y - self.settings_height - 12)
             else:
                 y = self.adapt_size(self.abs_y + 74)
             self.canvas_settings.place(x=self.adapt_size(148), y=y)
@@ -212,46 +218,98 @@ class ToolPanel(tk.Tk):
             self.canvas_options_show = False
 
     def setup_setting_window(self):
-        self.canvas_settings = tk.Canvas(self, bg=self.glass_color, height=self.adapt_size(202),
+        self.canvas_settings = tk.Canvas(self, bg=self.glass_color, height=self.adapt_size(self.settings_height),
                                          width=self.adapt_size(352), bd=0, highlightthickness=0)
-        self.canvas_settings.place(x=self.adapt_size(148), y=self.adapt_size(self.abs_y - 214))
+        self.canvas_settings.place(x=self.adapt_size(148), y=self.adapt_size(self.abs_y - self.settings_height - 12))
         self.canvas_settings.create_image(0, 0, image=self.set_img_tk, anchor=tk.NW)
         self.canvas_settings.place_forget()
         frame = self.setup_settings_inner_frame()
         button = DsButton(frame, width=self.adapt_size(60), height=self.adapt_size(26), bg='#262626', scale=self.scale)
-        button.place(x=self.adapt_size(180), y=self.adapt_size(3))
+        button.place(x=self.mode_switch_x, y=self.adapt_size(3),
+                     width=self.adapt_size(60), height=self.adapt_size(26))
         self.menus[6] = button
         self.canvas_settings.create_window(self.adapt_size(12), self.adapt_size(12), width=self.adapt_size(330),
-                                           height=self.adapt_size(180), window=frame, anchor=tk.NW)
+                                           height=self.adapt_size(self.settings_frame_height), window=frame, anchor=tk.NW)
 
     def setup_settings_inner_frame(self):
-        frame = tk.Frame(self, width=self.adapt_size(330), height=self.adapt_size(180), bd=1)
-        label = tk.Label(frame, width=self.adapt_size(330), height=self.adapt_size(180), image=self.frame_img_tk)
-        label.pack(fill=tk.BOTH, expand=True)
+        frame = tk.Frame(self, width=self.adapt_size(330), height=self.adapt_size(self.settings_frame_height), bd=1, bg='#262626')
+        label = tk.Label(frame, width=self.adapt_size(330), height=self.adapt_size(self.settings_frame_height), image=self.frame_img_tk)
+        label.place(x=0, y=0, width=self.adapt_size(330), height=self.adapt_size(self.settings_frame_height))
         self.select_sc_entry = tk.Entry(frame, font=('Arial', 8), disabledbackground='#872DE4',
                                         readonlybackground='#A283C0', foreground='black', textvariable=self.select_sc,
                                         relief=tk.FLAT, justify=tk.CENTER, disabledforeground='white', state='disabled')
-        self.select_sc_entry.place(x=self.adapt_size(120), y=self.adapt_size(95), width=self.adapt_size(125))
+        self.select_sc_entry.place(x=self.adapt_size(120), y=self.adapt_size(139), width=self.adapt_size(125))
         self.magic_sc_entry = tk.Entry(frame, font=('Arial', 8), disabledbackground='#872DE4',
                                        readonlybackground='#A283C0', foreground='black', textvariable=self.magic_sc,
                                        relief=tk.FLAT, justify=tk.CENTER, disabledforeground='white', state='disabled')
-        self.magic_sc_entry.place(x=self.adapt_size(120), y=self.adapt_size(139), width=self.adapt_size(125))
+        self.magic_sc_entry.place(x=self.adapt_size(120), y=self.adapt_size(183), width=self.adapt_size(125))
         select_lock_btn = tk.Button(frame, image=self.lock_img_tk, textvariable=self.slb_var, relief=tk.FLAT,
                                     bg='#262626')
-        select_lock_btn.place(x=self.adapt_size(260), y=self.adapt_size(95))
+        select_lock_btn.place(x=self.adapt_size(260), y=self.adapt_size(139))
         magic_lock_btn = tk.Button(frame, image=self.lock_img_tk, textvariable=self.mlb_var, relief=tk.FLAT,
                                    bg='#262626')
-        magic_lock_btn.place(x=self.adapt_size(260), y=self.adapt_size(139))
+        magic_lock_btn.place(x=self.adapt_size(260), y=self.adapt_size(183))
         self.menus[7] = select_lock_btn
         self.menus[8] = magic_lock_btn
+        self.setup_mode_labels(frame, 'Magic :', 'Clipboard', 'Save as', 3)
+        self.setup_share_row(frame)
         return frame
+
+    def setup_share_row(self, frame):
+        row_y = 47
+        self.cloud_config_btn = self.setup_mode_labels(frame, 'Share :', 'Cloud', 'Local', row_y)
+        self.cloud_config_btn.configure(cursor='hand2')
+        self.cloud_config_btn.bind('<Button-1>', lambda event:self.edit_cloud_config())
+        button = DsButton(frame, width=self.adapt_size(60), height=self.adapt_size(26),
+                          bg='#262626', scale=self.scale)
+        button.place(x=self.mode_switch_x, y=self.adapt_size(row_y),
+                     width=self.adapt_size(60), height=self.adapt_size(26))
+        self.menus[9] = button
+
+    def setup_mode_labels(self, frame, title, left, right, y):
+        # Use the same pixel-sized Tk font for both rows, avoiding bitmap/Tk DPI differences.
+        style = dict(font=('Arial', -max(1, self.adapt_size(18))), fg='white',
+                     bg='#262626', bd=0, padx=0, pady=0)
+        text_font = tkfont.Font(root=self, font=style['font'])
+        switch_width = self.adapt_size(60)
+        if title == 'Magic :':
+            # Fix the first row's text to the two edges of the options area.
+            # Center the switch in the remaining space between the actual text.
+            left_x = self.adapt_size(70)
+            right_x = self.adapt_size(320) - text_font.measure(right)
+            left_end = left_x + text_font.measure(left)
+            self.mode_switch_x = (left_end + right_x - switch_width) // 2
+            self.mode_text_gap = self.mode_switch_x - left_end
+        else:
+            # The second row inherits the first switch position and text gap.
+            left_x = self.mode_switch_x - self.mode_text_gap - text_font.measure(left)
+            right_x = self.mode_switch_x + switch_width + self.mode_text_gap
+        tk.Label(frame, text=title, anchor='w', **style).place(
+            x=self.adapt_size(10), y=self.adapt_size(y), width=self.adapt_size(58),
+            height=self.adapt_size(26))
+        left_label = tk.Label(frame, text=left, anchor='e', **style)
+        left_label.place(x=left_x, y=self.adapt_size(y),
+                         width=text_font.measure(left), height=self.adapt_size(26))
+        tk.Label(frame, text=right, anchor='w', **style).place(
+            x=right_x,
+            y=self.adapt_size(y), width=text_font.measure(right),
+            height=self.adapt_size(26))
+        return left_label
+
+    def edit_cloud_config(self):
+        from userconfig import open_cloud_config
+        from tkinter import messagebox
+        try:
+            open_cloud_config()
+        except OSError as error:
+            messagebox.showerror('Cloud', f'无法打开配置文件：{error}', parent=self)
 
     def motion_bind(self):
         self.canvas.bind('<Button-1>', self.record_drag_first_point)
         self.canvas.bind('<B1-Motion>', self.drag)
         self.position_display.bind('<Button-1>', self.record_drag_first_point)
         self.position_display.bind('<B1-Motion>', self.drag)
-        threading.Thread(target=self.update_position, daemon=True).start()
+        self.update_position()
 
     def record_drag_first_point(self, event):
         self.drag_first_point_x = event.x_root
@@ -282,10 +340,9 @@ class ToolPanel(tk.Tk):
         self.drag_first_point_y = event.y_root
 
     def update_position(self):
-        while True:
-            x, y = GetCursorPos()
-            self.position_display_var.set(f'{x},{y}')
-            time.sleep(0.05)
+        x, y = GetCursorPos()
+        self.position_display_var.set(f'{x},{y}')
+        self.after(50, self.update_position)
 
     def relative_to_assets(self, path: str) -> Path:
         return self.ASSETS_PATH / Path(path)

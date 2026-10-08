@@ -1,26 +1,16 @@
-import os
-
-def check_config():
-    if os.path.exists('config.ini'):
-        pass
-    else:
-        str = '''[DEFAULT]
-magic_mode = 1
-select_shortcut_key = ALT+A
-magic_shortcut_key = ALT+S
-pointer = 1
-recent_area = [(625,636),(1781,1107)]
-recent_path = ~/Desktop
-exit = 0'''
-        with open('config.ini', 'w') as ob:
-            ob.write(str)
-check_config()
-
-from mainwin import MainWindow
 import ctypes
 
 if __name__ == '__main__':
-    ctypes.windll.shcore.SetProcessDpiAwareness(1)
+    kernel = ctypes.windll.kernel32
+    kernel.CreateMutexW.restype = ctypes.c_void_p
+    mutex = kernel.CreateMutexW(None, False, 'Local\\MagicC.SingleInstance')
+    if kernel.GetLastError() == 183:
+        raise SystemExit(0)
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except (AttributeError, OSError):
+        ctypes.windll.user32.SetProcessDPIAware()
+    from mainwin import MainWindow
     main_window = MainWindow()
     main_window.window_gradually_()
     main_window.mainloop()

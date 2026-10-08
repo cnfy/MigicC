@@ -35,5 +35,6 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['media/app.ico']
+    icon=['media/app.ico'],
+    version='windows-version.txt',
 )

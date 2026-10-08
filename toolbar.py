@@ -1,6 +1,7 @@
 import tkinter as tk
 from pathlib import Path
 from PIL import Image, ImageTk
+import qrcode
 
 class Toolbar(tk.Frame):
     def __init__(self, master, scale=None):
@@ -10,8 +11,8 @@ class Toolbar(tk.Frame):
         self.scale = scale
         self._width = self.adapt_size(200)
         self._height = self.adapt_size(20)
-        self.bg_color = '#87CEFA'
-        self.act_color = '#4682B4'
+        self.bg_color = '#D45BE0'
+        self.act_color = '#B642CA'
         self.config(bg=self.bg_color)
         self.add_button()
 
@@ -34,6 +35,16 @@ class Toolbar(tk.Frame):
         self.undo_image = ImageTk.PhotoImage(undo_image)
         self.rect_image = ImageTk.PhotoImage(rect_image)
         self.save_image = ImageTk.PhotoImage(save_image)
+        qr = qrcode.QRCode()
+        qr.add_data('MagicC')
+        qr.make(fit=True)
+        qr_icon = qr.make_image(back_color=self.bg_color).convert('RGB').resize(
+            (self.image_size, self.image_size), Image.Resampling.NEAREST)
+        self.qr_image = ImageTk.PhotoImage(qr_icon)
+        self.qr_btn = tk.Button(self, image=self.qr_image, width=self.btn_size,
+                                height=self.btn_size, cursor='hand2', relief=tk.FLAT,
+                                bg=self.bg_color, activebackground=self.act_color,
+                                overrelief=tk.SUNKEN)
 
         self.confirm_btn = tk.Button(self, image=self.check_image, width=self.btn_size, height=self.btn_size,
                                      cursor='hand2', relief=tk.FLAT, bg=self.bg_color, activebackground=self.act_color,
@@ -52,6 +63,7 @@ class Toolbar(tk.Frame):
                                      overrelief=tk.SUNKEN, anchor=tk.CENTER)
         self.confirm_btn.pack(side=tk.RIGHT,padx=1)
         self.save_btn.pack(side=tk.RIGHT,padx=1)
+        self.qr_btn.pack(side=tk.RIGHT,padx=1)
         self.gif_btn.pack(side=tk.RIGHT,padx=1)
         self.mark_btn.pack(side=tk.RIGHT,padx=1)
         self.undo_btn.pack(side=tk.RIGHT,padx=1)
@@ -59,6 +71,7 @@ class Toolbar(tk.Frame):
     def disable_btns(self):
         self.confirm_btn.configure(state='disabled')
         self.save_btn.configure(state='disabled')
+        self.qr_btn.configure(state='disabled')
         self.gif_btn.configure(state='disabled')
         self.mark_btn.configure(state='disabled')
         self.undo_btn.configure(state='disabled')

@@ -1,0 +1,9 @@
+Pillow>=9.1
+pywin32
+pynput
+pystray
+screeninfo
+pyinstaller
+qrcode>=7.4
+requests>=2.32.4
+python-dotenv>=1.0.1
