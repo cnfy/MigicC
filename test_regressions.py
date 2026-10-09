@@ -23,6 +23,16 @@ def load_method(filename, class_name, method):
 
 
 class RegressionTests(unittest.TestCase):
+    def test_cancel_consumes_release_before_closing_overlay(self):
+        callbacks, closed = [], []
+        owner = SimpleNamespace(after_idle=callbacks.append,
+                                close_window=lambda event: closed.append(event))
+        result = load_method('shortcut.py', 'Shortcut', 'cancel_release')(owner, object())
+        self.assertEqual(result, 'break')
+        self.assertEqual(closed, [])
+        callbacks[0]()
+        self.assertEqual(closed, [0])
+
     def test_qr_share_png_and_token(self):
         from qrshare import ScreenshotShare
         share = ScreenshotShare(Image.new('RGB', (9, 7), (80, 120, 200)), host='127.0.0.1')

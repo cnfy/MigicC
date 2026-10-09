@@ -158,7 +158,7 @@ class Shortcut(tk.Toplevel):
             y1 = self.shortcut_area[1][1] - self.myscreen.y
             x = x0 + (x1 - x0) // 2
             y = y0 + (y1 - y0) // 2
-            self.countdown_img = ImageTk.PhotoImage(self.current_screen_image.crop((x, y, x + 40, y + 40)))
+            self.countdown_img = ImageTk.PhotoImage(self.original_screen_image.crop((x, y, x + 40, y + 40)))
             self.countdown_label.place(x=x,y=y,width=40,height=40)
             self.countdown_label.config(image=self.countdown_img,compound=tk.CENTER)
             self.countdown()
@@ -180,12 +180,23 @@ class Shortcut(tk.Toplevel):
         self.canvas.unbind('<ButtonRelease-1>')
         if with_cancel:
             self.canvas.unbind('<Button-3>')
+            self.canvas.unbind('<ButtonRelease-3>')
+
+    def bind_cancel(self):
+        # Keep the overlay alive through the complete click so Windows does not
+        # deliver the release to the application underneath.
+        self.canvas.bind('<Button-3>', lambda event: 'break')
+        self.canvas.bind('<ButtonRelease-3>', self.cancel_release)
+
+    def cancel_release(self, event):
+        self.after_idle(lambda: self.close_window(0))
+        return 'break'
 
     def unlock_bind(self):
         self.canvas.bind('<Button-1>', self.record_start)
         self.canvas.bind('<Motion>', self.update_paint)
         self.canvas.bind('<ButtonRelease-1>', self.paint_release)
-        self.canvas.bind('<Button-3>', lambda e:self.close_window(e,second=0.1))
+        self.bind_cancel()
 
     def mark_mode(self):
         # self.canvas.winfo_geometry()
@@ -232,7 +243,7 @@ class Shortcut(tk.Toplevel):
         self.canvas.bind('<Button-1>', self.record_start)
         self.canvas.bind('<Motion>', self.update_paint)
         self.canvas.bind('<ButtonRelease-1>', self.paint_release)
-        self.canvas.bind('<Button-3>', lambda e:self.close_window(e,second=0.1))
+        self.bind_cancel()
         self.bind('<<gif_recorder>>', self.open_gif_recorder)
 
     def record_start(self, event):
@@ -248,7 +259,7 @@ class Shortcut(tk.Toplevel):
             leftx, lefty = min(self.startx, event.x), min(self.starty, event.y)
             rightx, righty = max(self.startx, event.x), max(self.starty, event.y)
             self.shortcut_area = [(leftx, lefty),(rightx, righty)]
-            image = Image.new('RGBA',(rightx - leftx, righty - lefty), (255, 255, 255, 0))
+            image = self.original_screen_image.crop((leftx, lefty, rightx, righty))
             self.rec_image = ImageTk.PhotoImage(ImageOps.expand(image, border=1, fill=self.tool_bar.bg_color))
             self.canvas.create_image(leftx-1, lefty-1, image=self.rec_image, anchor=tk.NW, tags='shortcut_area')
 
