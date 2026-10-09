@@ -2,11 +2,13 @@
 import time
 import re
 import logging
+import sqlite3
 from io import BytesIO
-from hashlib import sha1
+from hashlib import sha1, sha256
 import os
 import threading
 import uuid
+from pathlib import Path
 from urllib.parse import urlparse
 
 from dotenv import dotenv_values
@@ -20,6 +22,32 @@ class PCloudError(Exception):
         self.code = code
 
 
+class CloudFileShare(str):
+    def __new__(cls, link, client, fileid):
+        instance = super().__new__(cls, link)
+        instance.client, instance.fileid = client, fileid
+        instance.closed = False
+        return instance
+
+    def close(self):
+        if self.closed:
+            return
+        self.closed = True
+        from cloud_cleanup import enqueue
+        try:
+            enqueue(self.client.account_key, self.fileid)
+        except Exception:
+            logging.getLogger(__name__).warning('Could not persist cloud deletion request')
+        def remove():
+            try:
+                self.client.delete_file(self.fileid)
+            except (PCloudError, OSError, sqlite3.Error):
+                logging.getLogger(__name__).warning('Cloud file deletion postponed until network recovery')
+        # Finish deletion even when closing the standalone sharing process.
+        self.deletion_thread = threading.Thread(target=remove, daemon=False)
+        self.deletion_thread.start()
+
+
 class PCloudClient:
     def __init__(self, username, password, host='api.pcloud.com', session=None):
         if host not in ('api.pcloud.com', 'eapi.pcloud.com'):
@@ -31,6 +59,7 @@ class PCloudClient:
         self.digest_params = None
         self.supports_expiry = True
         self.lock = threading.Lock()
+        self.account_key = sha256((host + '\n' + username.lower()).encode()).hexdigest()
 
     @classmethod
     def from_env(cls):
@@ -43,10 +72,17 @@ class PCloudClient:
             raise PCloudError('请点击设置里的 Cloud，在用户目录 .env 中填写用户名和密码并保存。')
         return cls(username, password, (values.get('PCLOUD_API_HOST') or 'api.pcloud.com').strip())
 
-    def request(self, method, data, files=None):
+    def request(self, method, data, files=None, progress=None):
         try:
+            headers = None
+            if files and any(hasattr(item[1], 'read') for item in files.values()):
+                from multipart_upload import MultipartUpload
+                data = MultipartUpload(data, files, progress=progress)
+                headers = {'Content-Type': data.content_type}
+                files = None
             response = self.session.post(f'https://{self.host}/{method}', data=data,
-                                         files=files, timeout=(10, 60), allow_redirects=False)
+                                         files=files, headers=headers,
+                                         timeout=(10, 60), allow_redirects=False)
             response.raise_for_status()
             if response.status_code != 200:
                 raise PCloudError('pCloud 返回了非预期 HTTP 状态。')
@@ -63,11 +99,14 @@ class PCloudClient:
             raise PCloudError(messages.get(code, f'pCloud 操作失败（错误码 {code}）。'), code=code)
         return result
 
-    def call(self, method, data, files=None):
+    def call(self, method, data, files=None, progress=None):
         credentials = {'auth': self.auth} if self.auth else self.digest_params
         if not credentials:
             raise PCloudError('尚未完成 pCloud 认证。')
-        result = self.request(method, {**data, **credentials}, files)
+        if progress is not None:
+            result = self.request(method, {**data, **credentials}, files, progress=progress)
+        else:
+            result = self.request(method, {**data, **credentials}, files)
         return result
 
     def authenticate(self):
@@ -88,17 +127,38 @@ class PCloudClient:
             # using the digest instead; refresh the digest on each new share.
 
     def share_image(self, image):
+        output = BytesIO()
+        image.convert('RGB').save(output, 'PNG')
+        return self.share_upload(output.getvalue(), 'image/png')
+
+    def share_file(self, path, progress=None):
+        path = Path(path).resolve(strict=True)
+        if not path.is_file():
+            raise PCloudError('请选择一个文件，暂不支持文件夹。')
+        with path.open('rb') as source:
+            return self.share_upload(source, 'application/octet-stream', path.name, progress=progress)
+
+    def share_upload(self, source, mime, filename=None, progress=None):
+        if progress:
+            progress('connecting', 0, 0)
         with self.lock:
             self.authenticate()
             try:
                 folder = self.call('createfolderifnotexists', {'folderid': 0, 'name': 'MagicC'})
                 folderid = folder['metadata']['folderid']
                 expires = int(time.time()) + 24 * 60 * 60
-                name = f'magicc_share_{expires}_{uuid.uuid4().hex[:12]}.png'
-                output = BytesIO()
-                image.convert('RGB').save(output, 'PNG')
-                uploaded = self.call('uploadfile', {'folderid': folderid, 'nopartial': 1, 'renameifexists': 1},
-                                     {'file': (name, output.getvalue(), 'image/png')})
+                identifier = uuid.uuid4().hex[:12]
+                name = (f'magicc_file_{expires}_{identifier}_{filename}' if filename is not None
+                        else f'magicc_share_{expires}_{identifier}.png')
+                upload_args = ({'folderid': folderid, 'nopartial': 1, 'renameifexists': 1},
+                               {'file': (name, source, mime)})
+                if progress:
+                    progress('uploading', 0, os.fstat(source.fileno()).st_size)
+                    uploaded = self.call('uploadfile', *upload_args,
+                                         progress=lambda sent, total: progress('uploading', sent, total))
+                    progress('processing', 0, 0)
+                else:
+                    uploaded = self.call('uploadfile', *upload_args)
                 fileid = uploaded['fileids'][0]
                 try:
                     link_params = {'fileid': fileid}
@@ -122,7 +182,7 @@ class PCloudClient:
                 parsed = urlparse(link)
                 if parsed.scheme != 'https' or parsed.hostname not in ('my.pcloud.com', 'u.pcloud.link', 'e.pcloud.link', 'www.pcloud.com'):
                     raise PCloudError('pCloud 返回了非预期分享链接。')
-                return link
+                return CloudFileShare(link, self, fileid) if filename is not None else link
             except PCloudError:
                 # Refresh on the next explicit attempt, without automatically retrying uploads.
                 self.auth = None
@@ -131,8 +191,27 @@ class PCloudClient:
             except (KeyError, IndexError, TypeError):
                 raise PCloudError('pCloud 返回数据缺少文件夹、文件或分享链接信息。') from None
 
+    def delete_file(self, fileid):
+        from cloud_cleanup import complete
+        with self.lock:
+            try:
+                self.authenticate()
+                try:
+                    self.call('deletefile', {'fileid': fileid})
+                except PCloudError as error:
+                    if error.code != 2009:
+                        raise
+            except PCloudError:
+                self.auth = None
+                self.digest_params = None
+                raise
+        complete(self.account_key, fileid)
+
     def cleanup_expired(self):
-        """Delete only this version's managed PNGs in /MagicC, never old files."""
+        """Delete only managed uploads in /MagicC, never unrelated files."""
+        from cloud_cleanup import pending
+        for fileid in pending(self.account_key):
+            self.delete_file(fileid)
         with self.lock:
             try:
                 self.authenticate()
@@ -145,7 +224,7 @@ class PCloudClient:
                 deleted = 0
                 now = int(time.time())
                 for item in folder['metadata']['contents']:
-                    match = re.fullmatch(r'magicc_share_(\d{10})_[0-9a-f]{12}\.png', item.get('name', ''))
+                    match = re.fullmatch(r'magicc_(?:share|file)_(\d{10})_[0-9a-f]{12}(?:\.png|_.+)', item.get('name', ''))
                     if item.get('isfolder') or not match or int(match[1]) > now:
                         continue
                     try:
@@ -184,7 +263,7 @@ def start_cloud_cleanup(owner):
             client = configured_client()
             if client is not None:
                 client.cleanup_expired()
-        except PCloudError as error:
+        except (PCloudError, OSError, sqlite3.Error) as error:
             logging.getLogger(__name__).warning('Cloud cleanup postponed: %s', error)
         finally:
             running.clear()

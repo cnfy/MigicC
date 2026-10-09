@@ -15,3 +15,7 @@ dist/config.ini
 /runtime.stdout.log
 /runtime.stderr.log
 /.env
+/.build-tools/
+/.signing/
+*.pfx
+*.p12

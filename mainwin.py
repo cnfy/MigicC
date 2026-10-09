@@ -1,4 +1,6 @@
 import time
+import sys
+import logging
 
 from PIL import Image
 import threading
@@ -23,6 +25,12 @@ class MainWindow(ToolPanel):
         self.bind_menu()
         self.shortcut_win = None
         self.loading_settings()
+        if getattr(sys, 'frozen', False) and settings.file_context_menu:
+            from file_context import register_menu
+            try:
+                register_menu()
+            except OSError:
+                logging.getLogger(__name__).warning('Unable to register file context menu')
         from pcloud_client import start_cloud_cleanup
         start_cloud_cleanup(self)
 
@@ -146,11 +154,35 @@ class MainWindow(ToolPanel):
         self.font = ('Arial', 15, 'bold')
 
     def create_menu(self):
-        menu = (pystray.MenuItem('Show', lambda *args:self.queue.put(self.show_window), default=True), pystray.Menu.SEPARATOR,
+        menu = (pystray.MenuItem('Show', lambda *args:self.queue.put(self.show_window), default=True),
+                pystray.MenuItem('文件二维码分享', lambda *args:self.queue.put(self.choose_share_file)),
+                pystray.MenuItem('文件右键分享', lambda *args:self.queue.put(self.toggle_file_context_menu),
+                                checked=lambda item: bool(settings.file_context_menu)),
+                pystray.Menu.SEPARATOR,
                 pystray.MenuItem('Exit', lambda *args:self.queue.put(self.quit_window)))
         image = Image.open(self.relative_to_assets('app.png'))
         self.pystray_icon = pystray.Icon('icon', image, name, menu)
         threading.Thread(target=self.pystray_icon.run, daemon=True).start()
+
+    def choose_share_file(self):
+        from tkinter import filedialog
+        from qrshare import QRShareWindow
+        path = filedialog.askopenfilename(parent=self, title='选择要分享的文件')
+        if path:
+            QRShareWindow(self, file_path=path, share_mode=settings.share_mode)
+
+    def toggle_file_context_menu(self):
+        from file_context import register_menu, unregister_menu
+        from tkinter import messagebox
+        enable = not settings.file_context_menu
+        try:
+            if enable:
+                register_menu()
+            else:
+                unregister_menu()
+            settings.update('file_context_menu', int(enable))
+        except OSError:
+            messagebox.showerror('文件右键分享', '无法更新文件右键菜单，请检查 Windows 用户权限。', parent=self)
 
     def show_window(self):
         self.deiconify()
@@ -175,6 +207,16 @@ class MainWindow(ToolPanel):
         self.menus.get(7).configure(command=self.change_lock_btn_image_s)
         self.menus.get(8).configure(command=self.change_lock_btn_image_m)
         self.menus[9].config(command=lambda value:self.update_settings('share_mode', value))
+        self.menus[10].config(command=self.update_startup)
+
+    def update_startup(self, enabled):
+        from startup import set_enabled, is_enabled
+        from tkinter import messagebox
+        try:
+            set_enabled(bool(enabled))
+        except OSError:
+            self.menus[10].setvalue(int(is_enabled()))
+            messagebox.showerror('开机启动', '无法更新开机启动设置，请检查 Windows 用户权限。', parent=self)
 
     def open_sub_window(self, *args):
         if self.shortcut_win is None or not self.shortcut_win.isopened:
@@ -196,6 +238,8 @@ class MainWindow(ToolPanel):
     def loading_settings(self):
         self.menus[6].setvalue(int(settings.magic_mode)) # 0:clipboard ,1:save
         self.menus[9].setvalue(settings.share_mode)
+        from startup import is_enabled
+        self.menus[10].setvalue(int(is_enabled()))
         self.select_sc.set(settings.select_shortcut_key)
         self.magic_sc.set(settings.magic_shortcut_key)
         self.setup_global_hotkeys()

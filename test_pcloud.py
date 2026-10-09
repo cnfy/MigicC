@@ -6,6 +6,11 @@ from pcloud_client import PCloudClient, PCloudError
 
 
 class PCloudTests(unittest.TestCase):
+    def setUp(self):
+        pending = patch('cloud_cleanup.pending', return_value=[])
+        pending.start()
+        self.addCleanup(pending.stop)
+
     def session(self, results):
         session = Mock()
         responses = []
@@ -77,12 +82,13 @@ class PCloudTests(unittest.TestCase):
             {'name': 'magicc_share_1800000001_abcdef012345.png', 'fileid': 2},
             {'name': 'screenshot_20261009_old.png', 'fileid': 3},
             {'name': 'personal.png', 'fileid': 4},
-            {'name': 'magicc_share_1700000000_abcdef012345.png', 'fileid': 5, 'isfolder': True}]
+            {'name': 'magicc_share_1700000000_abcdef012345.png', 'fileid': 5, 'isfolder': True},
+            {'name': 'magicc_file_1800000000_abcdef012345_文档.pdf', 'fileid': 6}]
         session = self.session([{'result': 0, 'digest': 'd'}, {'result': 0, 'auth': 't'},
-                                {'result': 0, 'metadata': {'contents': items}}, {'result': 0}])
+                                {'result': 0, 'metadata': {'contents': items}}, {'result': 0}, {'result': 0}])
         client = PCloudClient('u', 'p', session=session)
-        self.assertEqual(client.cleanup_expired(), 1)
-        self.assertEqual(session.post.call_args.kwargs['data']['fileid'], 1)
+        self.assertEqual(client.cleanup_expired(), 2)
+        self.assertEqual(session.post.call_args.kwargs['data']['fileid'], 6)
         self.assertEqual(session.post.call_args_list[2].kwargs['data']['path'], '/MagicC')
 
     def test_cleanup_network_failure_can_retry(self):

@@ -10,6 +10,7 @@ DEFAULT_CONFIG = {
     'exit': '0', 'gif_fps': '10', 'gif_max_seconds': '30',
     'gif_countdown': '3',
     'share_mode': '1',  # 0: Cloud, 1: Local
+    'file_context_menu': '1',
 }
 
 class Settings:
@@ -29,6 +30,7 @@ class Settings:
     def loading(self):
         self.magic_mode = self.number('magic_mode', 1, 0, 1)
         self.share_mode = self.number('share_mode', 1, 0, 1)
+        self.file_context_menu = self.number('file_context_menu', 1, 0, 1)
         self.select_shortcut_key = self.config['DEFAULT']['select_shortcut_key']
         self.magic_shortcut_key = self.config['DEFAULT']['magic_shortcut_key']
         self.pointer_show = self.number('pointer', 1, 0, 1)

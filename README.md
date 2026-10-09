@@ -1,12 +1,20 @@
 # MagicC — A tool for screenshot
 
-Current stable version: **MagicC 1.0.1** (2026-10-09).
+Current stable version: **MagicC 1.1.0** (2026-10-10).
 
 Build the Windows executable with `pyinstaller main.spec`. The EXE includes
-Windows file/product version `1.0.1`. User credentials are stored in
+Windows file/product version `1.1.0`. User credentials are stored in
 `%USERPROFILE%\MagicC\.env` and are not included in the executable.
 
 ## 更新记录
+
+### 1.1.0 — 2026-10-10
+
+- 新增文件右键二维码分享，支持 Local / Cloud。
+- 文件云端上传显示进度。
+- 文件云端分享关闭后立即清理。
+- 新增开机启动开关，开机时仅显示托盘图标。
+- 新增安装包和 Windows 11 右键菜单支持。
 
 ### 1.0.1 — 2026-10-09
 
@@ -51,6 +59,37 @@ Windows file/product version `1.0.1`. User credentials are stored in
 
 个人配置自动保存在 `%USERPROFILE%\MagicC\config.ini`，首次运行生成默认值，后续保留用户设置。
 配置和云盘凭据独立于程序目录，更新 EXE 时无需重新填写。`dist/` 构建产物与 `.env` 不纳入 Git。
+
+**Startup** 位于 Share 下方，选择 **On** 开启当前用户的开机启动，**Off** 关闭。
+开机时在后台运行，不显示桌面面板；通过托盘的 **Show** 或再次打开 MagicC 可显示面板。
+托盘图标是否收进右下角的折叠区，由 Windows 的任务栏设置决定。
+
+## 安装包
+
+运行 `MagicC-Setup.exe`，安装前可选择是否开机启动。默认安装到当前用户的
+`%LOCALAPPDATA%\Programs\MagicC`，不需要管理员权限。卸载保留个人配置。
+
+此构建的 Windows 11 新右键菜单使用本地测试签名，安装时需勾选对应选项，
+通过管理员确认信任 MagicC 本地签名证书；未勾选则使用传统右键菜单。正式公开分发需改用可信发布者签名。
+
+构建安装包：先构建 `main.spec`，再运行 `fetch_build_tools.py` 和 `build_installer.py`。
+构建另需 `cryptography` 和 Pillow；下载的工具和签名私钥保存在忽略目录中，不提交到 Git。
+
+## 文件二维码分享
+
+运行 EXE 后，在文件资源管理器中右键单个文件，选择 **用 MagicC 二维码分享**。
+Windows 11 中如未直接显示，可查看 **显示更多选项**。
+也可以右键托盘图标，选择 **文件二维码分享**，再选择文件。
+
+分享方式使用设置中的 **Share**：Local 需要手机与电脑在同一局域网，Cloud 使用 pCloud。
+本地分享按块读取文件，不会一次性载入整个文件；关闭二维码窗口或 10 分钟后停止分享。
+云端分享上传原始文件，关闭分享窗口后立即删除云端副本，不删除电脑上的文件。
+上传途中关闭窗口，会在上传结束后清理。断网导致删除失败时，下次启动联网后重试；
+24 小时清理保留为异常退出时的兜底。截图分享仍按 24 小时清理。
+目前支持单个文件，不支持文件夹和多选。
+
+文件右键入口只注册到当前 Windows 用户。右键托盘图标，取消勾选 **文件右键分享** 即可移除。
+如果移动 EXE，请重新运行更新入口路径；删除程序前可先移除入口。
 
 ## pCloud screenshot sharing
 

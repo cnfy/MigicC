@@ -11,6 +11,7 @@ from dstk import DsButton
 class ToolPanel(tk.Tk):
     def __init__(self):
         super().__init__()
+        self.withdraw()
         self.OUTPUT_PATH = Path(__file__).parent
         self.ASSETS_PATH = self.OUTPUT_PATH / Path('media')
         self._init_info()
@@ -24,8 +25,8 @@ class ToolPanel(tk.Tk):
         self.menus = {}
         self.button_imgs = {}
         self.abs_y = 300
-        self.settings_height = 246
-        self.settings_frame_height = 224
+        self.settings_height = 290
+        self.settings_frame_height = 268
         self.canvas_options_show = False
         self.canvas_settings_show = False
         self.magic_mode = 0 # 0 is copy. 1 is save
@@ -61,7 +62,7 @@ class ToolPanel(tk.Tk):
         self.set_img_tk = ImageTk.PhotoImage(self.set_img)
         original_frame = Image.open(self.relative_to_assets('frame.png')).convert('RGB')
         self.frame_img = Image.new('RGB', (330, self.settings_frame_height), '#262626')
-        self.frame_img.paste(original_frame.crop((0, 36, 330, 180)), (0, 80))
+        self.frame_img.paste(original_frame.crop((0, 36, 330, 180)), (0, 124))
         self.frame_img = self.frame_img.resize(
             (self.adapt_size(330), self.adapt_size(self.settings_frame_height)))
         self.frame_img_tk = ImageTk.PhotoImage(self.frame_img)
@@ -238,21 +239,22 @@ class ToolPanel(tk.Tk):
         self.select_sc_entry = tk.Entry(frame, font=('Arial', 8), disabledbackground='#872DE4',
                                         readonlybackground='#A283C0', foreground='black', textvariable=self.select_sc,
                                         relief=tk.FLAT, justify=tk.CENTER, disabledforeground='white', state='disabled')
-        self.select_sc_entry.place(x=self.adapt_size(120), y=self.adapt_size(139), width=self.adapt_size(125))
+        self.select_sc_entry.place(x=self.adapt_size(120), y=self.adapt_size(183), width=self.adapt_size(125))
         self.magic_sc_entry = tk.Entry(frame, font=('Arial', 8), disabledbackground='#872DE4',
                                        readonlybackground='#A283C0', foreground='black', textvariable=self.magic_sc,
                                        relief=tk.FLAT, justify=tk.CENTER, disabledforeground='white', state='disabled')
-        self.magic_sc_entry.place(x=self.adapt_size(120), y=self.adapt_size(183), width=self.adapt_size(125))
+        self.magic_sc_entry.place(x=self.adapt_size(120), y=self.adapt_size(227), width=self.adapt_size(125))
         select_lock_btn = tk.Button(frame, image=self.lock_img_tk, textvariable=self.slb_var, relief=tk.FLAT,
                                     bg='#262626')
-        select_lock_btn.place(x=self.adapt_size(260), y=self.adapt_size(139))
+        select_lock_btn.place(x=self.adapt_size(260), y=self.adapt_size(183))
         magic_lock_btn = tk.Button(frame, image=self.lock_img_tk, textvariable=self.mlb_var, relief=tk.FLAT,
                                    bg='#262626')
-        magic_lock_btn.place(x=self.adapt_size(260), y=self.adapt_size(183))
+        magic_lock_btn.place(x=self.adapt_size(260), y=self.adapt_size(227))
         self.menus[7] = select_lock_btn
         self.menus[8] = magic_lock_btn
         self.setup_mode_labels(frame, 'Magic :', 'Clipboard', 'Save as', 3)
         self.setup_share_row(frame)
+        self.setup_startup_row(frame)
         return frame
 
     def setup_share_row(self, frame):
@@ -285,7 +287,7 @@ class ToolPanel(tk.Tk):
             left_x = self.mode_switch_x - self.mode_text_gap - text_font.measure(left)
             right_x = self.mode_switch_x + switch_width + self.mode_text_gap
         tk.Label(frame, text=title, anchor='w', **style).place(
-            x=self.adapt_size(10), y=self.adapt_size(y), width=self.adapt_size(58),
+            x=self.adapt_size(10), y=self.adapt_size(y), width=self.adapt_size(88 if title == 'Startup :' else 58),
             height=self.adapt_size(26))
         left_label = tk.Label(frame, text=left, anchor='e', **style)
         left_label.place(x=left_x, y=self.adapt_size(y),
@@ -295,6 +297,14 @@ class ToolPanel(tk.Tk):
             y=self.adapt_size(y), width=text_font.measure(right),
             height=self.adapt_size(26))
         return left_label
+
+    def setup_startup_row(self, frame):
+        self.setup_mode_labels(frame, 'Startup :', 'Off', 'On', 91)
+        button = DsButton(frame, width=self.adapt_size(60), height=self.adapt_size(26),
+                          bg='#262626', scale=self.scale)
+        button.place(x=self.mode_switch_x, y=self.adapt_size(91),
+                     width=self.adapt_size(60), height=self.adapt_size(26))
+        self.menus[10] = button
 
     def edit_cloud_config(self):
         from userconfig import open_cloud_config

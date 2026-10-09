@@ -1,0 +1,4 @@
+LIBRARY MagicCShell
+EXPORTS
+    DllGetClassObject
+    DllCanUnloadNow
