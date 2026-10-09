@@ -1,12 +1,17 @@
 # MagicC — A tool for screenshot
 
-Current stable version: **MagicC 1.0.0** (2026-10-09).
+Current stable version: **MagicC 1.0.1** (2026-10-09).
 
 Build the Windows executable with `pyinstaller main.spec`. The EXE includes
-Windows file/product version `1.0.0`. User credentials are stored in
+Windows file/product version `1.0.1`. User credentials are stored in
 `%USERPROFILE%\MagicC\.env` and are not included in the executable.
 
 ## 更新记录
+
+### 1.0.1 — 2026-10-09
+
+- 截图选框内恢复原始亮度，框外保留灰色遮罩。
+- 修复右键取消截图时触发后面应用右键菜单的问题。
 
 ### 1.0.0 — 2026-10-09
 
